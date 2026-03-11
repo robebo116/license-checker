@@ -165,9 +165,10 @@ function bufferToBase64(buffer: ArrayBuffer) {
 function pemToArrayBuffer(pem: string) {
 
   const b64 = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\s/g, "");
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\n/g, "")
+    .trim();
 
   const binary = atob(b64);
 

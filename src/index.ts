@@ -147,6 +147,3 @@ async function signPayload(payload: any, secret: string) {
 
   return bufferToBase64(signature);
 }
-
-  return bytes.buffer;
-}

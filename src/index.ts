@@ -68,15 +68,15 @@ export default {
 
     /* ===== PAYLOAD ===== */
 
-    /* Trong Worker, thay thế dòng tạo message cũ bằng dòng này */
-    const payload = {
-      expire_at_ts: expireAtTs, // Thử tự khai báo không quan trọng nữa
-      hwid: finalHwid,
-      key: key
-    };
-    
-    // Sắp xếp key theo bảng chữ cái để tạo chuỗi "chuẩn" (Canonical JSON)
-    const message = JSON.stringify(payload, Object.keys(payload).sort());
+    const orderedPayload = {
+        expire_at_ts: payload.expire_at_ts,
+        hwid: payload.hwid,
+        key: payload.key
+      };
+      
+      // JSON.stringify trong Worker không có tham số sort_keys, 
+      // nên ta phải tự đảm bảo thứ tự key khi tạo object.
+      const message = JSON.stringify(orderedPayload);
 
     const signature = await signPayload(payload, env.PRIVATE_KEY);
 

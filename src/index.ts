@@ -76,7 +76,7 @@ export default {
       expire_at_ts: expireAtTs
     };
 
-    const signature = await signPayload(payload, env.SECRET_KEY);
+    const signature = await signPayload(payload, env.PRIVATE_KEY);
 
 
     console.log("payload:", payload);
@@ -115,7 +115,6 @@ async function signPayload(payload, privateKeyPem) {
   const message = JSON.stringify(payload);
 
   if (!cachedPrivateKey) {
-
     cachedPrivateKey = await crypto.subtle.importKey(
       "pkcs8",
       pemToArrayBuffer(privateKeyPem),

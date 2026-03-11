@@ -64,14 +64,19 @@ export default {
     }
 
     /* ================= PAYLOAD ================= */
-
+    
     const payload = {
       key,
       hwid: finalHwid,
       expire_at_ts: expireAtTs
     };
-
-    const responseBody = json(payload);
+    
+    const signature = await signPayload(payload, env.PRIVATE_KEY);
+    
+    const responseBody = json({
+      ...payload,
+      signature
+    });
 
     /* ================= CACHE TTL ================= */
 
@@ -81,7 +86,7 @@ export default {
     const cachedResponse = new Response(responseBody.body, {
       headers: {
         "Content-Type": "application/json",
-        "Cache-Control": `public, max-age=${ttlSeconds}`
+        "Cache-Control": `public, max-age=${ttlSeconds}, immutable`
       }
     });
 
@@ -108,4 +113,69 @@ function cacheKey(key: string, hwid: string): string {
 
 function nowIsoString(): string {
   return new Date().toISOString();
+}
+let cachedPrivateKey: CryptoKey | null = null;
+async function signPayload(payload: any, privateKeyPem: string) {
+
+  const data =
+    payload.key +
+    payload.hwid +
+    payload.expire_at_ts;
+
+  const encoder = new TextEncoder();
+
+  if (!cachedPrivateKey) {
+    cachedPrivateKey = await crypto.subtle.importKey(
+      "pkcs8",
+      pemToArrayBuffer(privateKeyPem),
+      {
+        name: "ECDSA",
+        namedCurve: "P-256"
+      },
+      false,
+      ["sign"]
+    );
+  }
+
+  const signature = await crypto.subtle.sign(
+    {
+      name: "ECDSA",
+      hash: "SHA-256"
+    },
+    cachedPrivateKey,
+    encoder.encode(data)
+  );
+
+  return bufferToBase64(signature);
+}
+
+function bufferToBase64(buffer: ArrayBuffer) {
+
+  const bytes = new Uint8Array(buffer);
+
+  let binary = "";
+
+  for (const b of bytes) {
+    binary += String.fromCharCode(b);
+  }
+
+  return btoa(binary);
+}
+
+function pemToArrayBuffer(pem: string) {
+
+  const b64 = pem
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s/g, "");
+
+  const binary = atob(b64);
+
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes.buffer;
 }

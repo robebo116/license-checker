@@ -69,14 +69,14 @@ export default {
     /* ===== PAYLOAD ===== */
 
     const orderedPayload = {
-        expire_at_ts: payload.expire_at_ts,
-        hwid: payload.hwid,
-        key: payload.key
-      };
-      
-      // JSON.stringify trong Worker không có tham số sort_keys, 
-      // nên ta phải tự đảm bảo thứ tự key khi tạo object.
-      const message = JSON.stringify(orderedPayload);
+      expire_at_ts: payload.expire_at_ts,
+      hwid: payload.hwid,
+      key: payload.key
+    };
+    const message = JSON.stringify(orderedPayload);
+    
+    // THÊM DÒNG NÀY VÀO WORKER
+    console.log("CHUỖI GỐC TẠI WORKER:", message);
 
     const signature = await signPayload(payload, env.PRIVATE_KEY);
 

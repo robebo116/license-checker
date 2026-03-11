@@ -1,5 +1,3 @@
-let cachedCryptoKey: CryptoKey | null = null;
-
 export default {
   async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
 
@@ -77,10 +75,6 @@ export default {
     };
 
     const signature = await signPayload(payload, env.PRIVATE_KEY);
-
-
-    console.log("payload:", payload);
-    console.log("secret:", env.SECRET_KEY);
 
     const responseBody = json({
       ...payload,
@@ -179,7 +173,9 @@ function pemToArrayBuffer(pem) {
   const clean = pem
     .replace(/-----BEGIN PRIVATE KEY-----/g, "")
     .replace(/-----END PRIVATE KEY-----/g, "")
-    .replace(/\n/g, "");
+    .replace(/\r/g, "")
+    .replace(/\n/g, "")
+    .trim();
 
   const binary = atob(clean);
 

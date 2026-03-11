@@ -71,7 +71,7 @@ export default {
       expire_at_ts: expireAtTs
     };
     
-    const signature = "test";
+    const signature = await signPayload(payload, env.SECRET_KEY);
     
     const responseBody = json({
       ...payload,
@@ -114,40 +114,6 @@ function cacheKey(key: string, hwid: string): string {
 function nowIsoString(): string {
   return new Date().toISOString();
 }
-let cachedPrivateKey: CryptoKey | null = null;
-async function signPayload(payload: any, privateKeyPem: string) {
-
-  const data =
-    payload.key +
-    payload.hwid +
-    payload.expire_at_ts;
-
-  const encoder = new TextEncoder();
-
-  if (!cachedPrivateKey) {
-    cachedPrivateKey = await crypto.subtle.importKey(
-      "pkcs8",
-      pemToArrayBuffer(privateKeyPem),
-      {
-        name: "ECDSA",
-        namedCurve: "P-256"
-      },
-      false,
-      ["sign"]
-    );
-  }
-
-  const signature = await crypto.subtle.sign(
-    {
-      name: "ECDSA",
-      hash: "SHA-256"
-    },
-    cachedPrivateKey,
-    encoder.encode(data)
-  );
-
-  return bufferToBase64(signature);
-}
 
 function bufferToBase64(buffer: ArrayBuffer) {
 
@@ -161,23 +127,26 @@ function bufferToBase64(buffer: ArrayBuffer) {
 
   return btoa(binary);
 }
+async function signPayload(payload: any, secret: string) {
 
-function pemToArrayBuffer(pem: string) {
+  const data = JSON.stringify(payload);
 
-  const clean = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
-    .replace(/-----END PRIVATE KEY-----/g, "")
-    .replace(/\r/g, "")
-    .replace(/\n/g, "")
-    .trim();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
 
-  const binary = atob(clean);
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(data)
+  );
 
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
+  return bufferToBase64(signature);
+}
 
   return bytes.buffer;
 }

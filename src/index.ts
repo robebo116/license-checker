@@ -78,6 +78,10 @@ export default {
 
     const signature = await signPayload(payload, env.SECRET_KEY);
 
+
+    console.log("payload:", payload);
+    console.log("secret:", env.SECRET_KEY);
+
     const responseBody = json({
       ...payload,
       signature

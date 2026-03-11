@@ -108,28 +108,33 @@ export default {
 
 /* ===== SIGN ===== */
 
-async function signPayload(payload: any, secret: string) {
+let cachedPrivateKey = null;
 
-  const data =
-    payload.key +
-    payload.hwid +
-    payload.expire_at_ts;
+async function signPayload(payload, privateKeyPem) {
 
-  if (!cachedCryptoKey) {
+  const message = JSON.stringify(payload);
 
-    cachedCryptoKey = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
+  if (!cachedPrivateKey) {
+
+    cachedPrivateKey = await crypto.subtle.importKey(
+      "pkcs8",
+      pemToArrayBuffer(privateKeyPem),
+      {
+        name: "ECDSA",
+        namedCurve: "P-256"
+      },
       false,
       ["sign"]
     );
   }
 
   const signature = await crypto.subtle.sign(
-    "HMAC",
-    cachedCryptoKey,
-    new TextEncoder().encode(data)
+    {
+      name: "ECDSA",
+      hash: "SHA-256"
+    },
+    cachedPrivateKey,
+    new TextEncoder().encode(message)
   );
 
   return bufferToBase64(signature);
@@ -168,4 +173,22 @@ function bufferToBase64(buffer: ArrayBuffer) {
   }
 
   return btoa(binary);
+}
+
+function pemToArrayBuffer(pem) {
+
+  const clean = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\n/g, "");
+
+  const binary = atob(clean);
+
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes.buffer;
 }

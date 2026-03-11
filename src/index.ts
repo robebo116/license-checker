@@ -71,7 +71,7 @@ export default {
       expire_at_ts: expireAtTs
     };
     
-    const signature = await signPayload(payload, env.PRIVATE_KEY);
+    const signature = "test";
     
     const responseBody = json({
       ...payload,

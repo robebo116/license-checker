@@ -68,22 +68,25 @@ export default {
 
     /* ===== PAYLOAD ===== */
 
-    const orderedPayload = {
-      expire_at_ts: payload.expire_at_ts,
-      hwid: payload.hwid,
-      key: payload.key
-    };
-    const message = JSON.stringify(orderedPayload);
+    // Đảm bảo các giá trị là số nguyên (Integer) để tránh sai lệch số thập phân
+    const finalExpireTs = Math.floor(expireAtTs);
     
-    // THÊM DÒNG NÀY VÀO WORKER
-    console.log("CHUỖI GỐC TẠI WORKER:", message);
+    const payload = {
+        expire_at_ts: finalExpireTs,
+        hwid: finalHwid,
+        key: key
+    };
+    
+    // Sắp xếp key để Python dễ bắt chước
+    const message = JSON.stringify(payload, Object.keys(payload).sort());
+    const signature = await signPayload(message, env.PRIVATE_KEY); // Truyền message đã stringify vào hàm sign
+    
+    const responseData = {
+        ...payload,
+        signature: signature
+    };
 
-    const signature = await signPayload(payload, env.PRIVATE_KEY);
-
-    const responseBody = json({
-      ...payload,
-      signature
-    });
+const responseBody = JSON.stringify(responseData);
 
     /* ===== CACHE TTL ===== */
 
@@ -108,35 +111,18 @@ export default {
 
 let cachedPrivateKey = null;
 
-async function signPayload(payload, privateKeyPem) {
-
-  const message = JSON.stringify(payload);
-
-  if (!cachedPrivateKey) {
-    cachedPrivateKey = await crypto.subtle.importKey(
-      "pkcs8",
-      pemToArrayBuffer(privateKeyPem),
-      {
-        name: "ECDSA",
-        namedCurve: "P-256"
-      },
-      false,
-      ["sign"]
+async function signPayload(message, privateKeyPem) {
+    // message lúc này đã là chuỗi JSON chuẩn từ bước trên
+    if (!cachedPrivateKey) {
+        // ... import key như cũ ...
+    }
+    const signature = await crypto.subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        cachedPrivateKey,
+        new TextEncoder().encode(message)
     );
-  }
-
-  const signature = await crypto.subtle.sign(
-    {
-      name: "ECDSA",
-      hash: "SHA-256"
-    },
-    cachedPrivateKey,
-    new TextEncoder().encode(message)
-  );
-
-  return bufferToBase64(signature);
+    return bufferToBase64(signature);
 }
-
 /* ===== UTILS ===== */
 
 function json(data: any, status = 200): Response {

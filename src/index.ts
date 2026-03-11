@@ -68,11 +68,15 @@ export default {
 
     /* ===== PAYLOAD ===== */
 
+    /* Trong Worker, thay thế dòng tạo message cũ bằng dòng này */
     const payload = {
-      key,
+      expire_at_ts: expireAtTs, // Thử tự khai báo không quan trọng nữa
       hwid: finalHwid,
-      expire_at_ts: expireAtTs
+      key: key
     };
+    
+    // Sắp xếp key theo bảng chữ cái để tạo chuỗi "chuẩn" (Canonical JSON)
+    const message = JSON.stringify(payload, Object.keys(payload).sort());
 
     const signature = await signPayload(payload, env.PRIVATE_KEY);
 

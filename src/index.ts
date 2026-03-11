@@ -100,3 +100,46 @@ export default {
     return cachedResponse;
   }
 };
+
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json"
+    }
+  });
+}
+
+function cacheKey(key: string, hwid: string) {
+  return `https://cache/license/${key}/${hwid}`;
+}
+
+function nowIsoString() {
+  return new Date().toISOString();
+}
+
+function formatIso(ts: number) {
+  return new Date(ts).toISOString();
+}
+
+async function sign(data: string, secret: string) {
+  const enc = new TextEncoder();
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    enc.encode(data)
+  );
+
+  return [...new Uint8Array(sig)]
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}

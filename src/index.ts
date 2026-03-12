@@ -74,7 +74,7 @@ export default {
       `${payload.key}|${payload.hwid}|` +
       `${payload.expire_at_ts}|${payload.issued_at}`;
 
-    const signature = await signHmac(raw, env.SECRET);
+    const signature = await signHmac(raw, env.SECRET_KEY);
 
     const response = {
       ...payload,

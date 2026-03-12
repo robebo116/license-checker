@@ -1,6 +1,5 @@
 export default {
   async fetch(request, env, ctx) {
-
     if (request.method !== "POST") {
       return json({ error: "Only POST allowed" }, 405);
     }
@@ -11,19 +10,16 @@ export default {
       return json({ error: "Missing key or hwid" }, 400);
     }
 
-    /* ================= CACHE ================= */
-
+    /* ================= CACHE CHECK ================= */
     const cache = caches.default;
     const cacheReq = new Request(cacheKey(key, hwid));
-
     const cached = await cache.match(cacheReq);
 
     if (cached) {
-      return cached;
+      return cached; // ✅ còn hạn → khỏi check DB
     }
 
-    /* ================= DB ================= */
-
+    /* ================= DB CHECK ================= */
     const record = await env.DB
       .prepare("SELECT * FROM license_keys WHERE key = ?")
       .bind(key)
@@ -40,10 +36,7 @@ export default {
     let activatedAt = record.activated_at;
     let finalHwid = record.hwid;
 
-    /* ================= ACTIVATE ================= */
-
     if (!record.hwid) {
-
       const nowIso = nowIsoString();
 
       await env.DB
@@ -57,12 +50,9 @@ export default {
       finalHwid = hwid;
     }
 
-    /* ================= EXPIRE ================= */
-
     const activatedTs = Date.parse(activatedAt);
-
     const expireAtTs =
-      activatedTs + Number(record.expire_days) * 86400000;
+      activatedTs + record.expire_days * 86400000;
 
     const nowTs = Date.now();
 
@@ -73,7 +63,6 @@ export default {
     const expireAtIso = formatIso(expireAtTs);
 
     /* ================= PAYLOAD ================= */
-
     const payload = {
       key,
       hwid: finalHwid,
@@ -83,26 +72,21 @@ export default {
       issued_at: nowTs
     };
 
-    /* ================= SIGN STRING ================= */
-
     const raw =
       `${payload.key}|${payload.hwid}|` +
       `${payload.expire_at_ts}|${payload.issued_at}`;
 
-    const signature = await sign(raw, env.PRIVATE_KEY);
+    const signature = await sign(raw, env.SECRET);
 
-    const responseBody = JSON.stringify({
-      ...payload,
-      signature
-    });
+    const responseBody = json({ ...payload, signature });
 
     /* ================= CACHE TTL ================= */
-
     let ttlSeconds = Math.floor((expireAtTs - nowTs) / 1000);
 
+    // Giới hạn TTL Cloudflare (max 1 năm)
     ttlSeconds = Math.min(ttlSeconds, 31536000);
 
-    const response = new Response(responseBody, {
+    const cachedResponse = new Response(responseBody.body, {
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": `public, max-age=${ttlSeconds}`
@@ -110,58 +94,14 @@ export default {
     });
 
     ctx.waitUntil(
-      cache.put(cacheReq, response.clone())
+      cache.put(cacheReq, cachedResponse.clone())
     );
 
-    return response;
+    return cachedResponse;
   }
 };
 
-
-
-
-
-
-/* ================= SIGNING ================= */
-
-let cachedPrivateKey = null;
-
-async function sign(data, privateKeyPem) {
-
-  if (!cachedPrivateKey) {
-
-    cachedPrivateKey = await crypto.subtle.importKey(
-      "pkcs8",
-      pemToArrayBuffer(privateKeyPem),
-      {
-        name: "ECDSA",
-        namedCurve: "P-256"
-      },
-      false,
-      ["sign"]
-    );
-  }
-
-  const signature = await crypto.subtle.sign(
-    {
-      name: "ECDSA",
-      hash: "SHA-256"
-    },
-    cachedPrivateKey,
-    new TextEncoder().encode(data)
-  );
-
-  return bufferToBase64(signature);
-}
-
-
-
-
-
-/* ================= UTILS ================= */
-
-function json(data, status = 200) {
-
+function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
@@ -170,55 +110,36 @@ function json(data, status = 200) {
   });
 }
 
-
-function cacheKey(key, hwid) {
-
-  return `https://cache/license/${key}/${hwid}`;
+function cacheKey(key: string, hwid: string) {
+  return `https://cache/license2/${key}/${hwid}`;
 }
 
-
 function nowIsoString() {
-
   return new Date().toISOString();
 }
 
-
-function formatIso(ts) {
-
+function formatIso(ts: number) {
   return new Date(ts).toISOString();
 }
 
+async function sign(data: string, secret: string) {
+  const enc = new TextEncoder();
 
-function pemToArrayBuffer(pem) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
 
-  const clean = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
-    .replace(/-----END PRIVATE KEY-----/g, "")
-    .replace(/\r/g, "")
-    .replace(/\n/g, "")
-    .trim();
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    enc.encode(data)
+  );
 
-  const binary = atob(clean);
-
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return bytes.buffer;
-}
-
-
-function bufferToBase64(buffer) {
-
-  const bytes = new Uint8Array(buffer);
-
-  let binary = "";
-
-  for (const b of bytes) {
-    binary += String.fromCharCode(b);
-  }
-
-  return btoa(binary);
+  return [...new Uint8Array(sig)]
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
 }

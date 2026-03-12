@@ -1,5 +1,6 @@
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
+
     if (request.method !== "POST") {
       return json({ error: "Only POST allowed" }, 405);
     }
@@ -10,16 +11,8 @@ export default {
       return json({ error: "Missing key or hwid" }, 400);
     }
 
-    /* ================= CACHE CHECK ================= */
-    const cache = caches.default;
-    const cacheReq = new Request(cacheKey(key, hwid));
-    const cached = await cache.match(cacheReq);
+    /* ===== DB CHECK ===== */
 
-    if (cached) {
-      return cached; // ✅ còn hạn → khỏi check DB
-    }
-
-    /* ================= DB CHECK ================= */
     const record = await env.DB
       .prepare("SELECT * FROM license_keys WHERE key = ?")
       .bind(key)
@@ -36,8 +29,11 @@ export default {
     let activatedAt = record.activated_at;
     let finalHwid = record.hwid;
 
+    /* ===== FIRST ACTIVATE ===== */
+
     if (!record.hwid) {
-      const nowIso = nowIsoString();
+
+      const nowIso = new Date().toISOString();
 
       await env.DB
         .prepare(
@@ -50,9 +46,12 @@ export default {
       finalHwid = hwid;
     }
 
+    /* ===== EXPIRE ===== */
+
     const activatedTs = Date.parse(activatedAt);
+
     const expireAtTs =
-      activatedTs + record.expire_days * 86400000;
+      activatedTs + Number(record.expire_days) * 86400000;
 
     const nowTs = Date.now();
 
@@ -60,69 +59,41 @@ export default {
       return json({ error: "Key expired" }, 403);
     }
 
-    const expireAtIso = formatIso(expireAtTs);
+    /* ===== PAYLOAD ===== */
 
-    /* ================= PAYLOAD ================= */
     const payload = {
-      key,
+      key: key,
       hwid: finalHwid,
-      activated_at: activatedAt,
-      expire_at: expireAtIso,
       expire_at_ts: expireAtTs,
       issued_at: nowTs
     };
+
+    /* ===== SIGN ===== */
 
     const raw =
       `${payload.key}|${payload.hwid}|` +
       `${payload.expire_at_ts}|${payload.issued_at}`;
 
-    const signature = await sign(raw, env.SECRET);
+    const signature = await signHmac(raw, env.PUBLIC_SECRET);
 
-    const responseBody = json({ ...payload, signature });
+    const response = {
+      ...payload,
+      signature
+    };
 
-    /* ================= CACHE TTL ================= */
-    let ttlSeconds = Math.floor((expireAtTs - nowTs) / 1000);
-
-    // Giới hạn TTL Cloudflare (max 1 năm)
-    ttlSeconds = Math.min(ttlSeconds, 31536000);
-
-    const cachedResponse = new Response(responseBody.body, {
+    return new Response(JSON.stringify(response), {
       headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": `public, max-age=${ttlSeconds}`
+        "Content-Type": "application/json"
       }
     });
-
-    ctx.waitUntil(
-      cache.put(cacheReq, cachedResponse.clone())
-    );
-
-    return cachedResponse;
   }
 };
 
-function json(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json"
-    }
-  });
-}
 
-function cacheKey(key: string, hwid: string) {
-  return `https://cache/license2/${key}/${hwid}`;
-}
+/* ===== HMAC SIGN ===== */
 
-function nowIsoString() {
-  return new Date().toISOString();
-}
+async function signHmac(data, secret) {
 
-function formatIso(ts: number) {
-  return new Date(ts).toISOString();
-}
-
-async function sign(data: string, secret: string) {
   const enc = new TextEncoder();
 
   const key = await crypto.subtle.importKey(
@@ -139,7 +110,28 @@ async function sign(data: string, secret: string) {
     enc.encode(data)
   );
 
-  return [...new Uint8Array(sig)]
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join("");
+  return bufferToBase64(sig);
+}
+
+
+/* ===== UTILS ===== */
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+function bufferToBase64(buffer) {
+
+  const bytes = new Uint8Array(buffer);
+
+  let binary = "";
+
+  for (const b of bytes) {
+    binary += String.fromCharCode(b);
+  }
+
+  return btoa(binary);
 }

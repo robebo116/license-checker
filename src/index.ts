@@ -47,9 +47,9 @@ export default {
     const finalExpireTs = Math.floor(expireAtTs);
     
     const payload = {
-      expire_at_ts: finalExpireTs,
+      key: key,
       hwid: finalHwid,
-      key: key
+      expire_at_ts: finalExpireTs
     };
     
     const message = JSON.stringify(payload);

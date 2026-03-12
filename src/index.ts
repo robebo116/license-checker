@@ -59,7 +59,7 @@ export default {
     const responseData = { ...payload, signature };
     const responseString = JSON.stringify(responseData);
 
-    /* ===== CACHE TTL ===== */
+    /* =====  TTL ===== */
     let ttlSeconds = Math.max(0, Math.floor((expireAtTs - nowTs) / 1000));
     ttlSeconds = Math.min(ttlSeconds, 31536000);
 
@@ -113,7 +113,7 @@ function json(data: any, status = 200): Response {
 
 function cacheKey(key: string, hwid: string): string {
 
-  return `https://cache/license/${key}/${hwid}`;
+  return `https://cache/license1/${key}/${hwid}`;
 }
 
 function nowIsoString(): string {

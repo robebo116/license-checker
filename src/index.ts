@@ -46,15 +46,14 @@ export default {
     /* ===== PAYLOAD & SIGNING (Đồng bộ với Python) ===== */
     const finalExpireTs = Math.floor(expireAtTs);
     
-    // Tạo object theo đúng thứ tự A-Z để đồng bộ với sort_keys=True của Python
     const payload = {
       expire_at_ts: finalExpireTs,
       hwid: finalHwid,
       key: key
     };
-
-    // Tạo chuỗi JSON chuẩn (không khoảng trắng, sort key)
-    const message = JSON.stringify(payload, Object.keys(payload).sort());
+    
+    const message = JSON.stringify(payload);
+    
     const signature = await signPayload(message, env.PRIVATE_KEY);
     
     const responseData = { ...payload, signature };

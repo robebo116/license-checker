@@ -3,13 +3,9 @@ export default {
 
     try {
 
-      /* ===== METHOD CHECK ===== */
-
       if (request.method !== "POST") {
         return json({ error: "Only POST allowed" }, 405);
       }
-
-      /* ===== PARSE JSON SAFE ===== */
 
       let body;
 
@@ -36,8 +32,6 @@ export default {
         return json({ error: "Invalid key" }, 403);
       }
 
-      /* ===== HWID CHECK ===== */
-
       if (record.hwid && record.hwid !== hwid) {
         return json({ error: "Key already used on another device" }, 403);
       }
@@ -45,7 +39,7 @@ export default {
       let activatedAt = record.activated_at;
       let finalHwid = record.hwid;
 
-      /* ===== FIRST ACTIVATION ===== */
+      /* ===== FIRST ACTIVATE ===== */
 
       if (!record.hwid) {
 
@@ -62,13 +56,9 @@ export default {
         finalHwid = hwid;
       }
 
-      /* ===== EXPIRE CHECK ===== */
+      /* ===== EXPIRE ===== */
 
       const activatedTs = Date.parse(activatedAt);
-
-      if (!activatedTs) {
-        return json({ error: "Invalid activation date" }, 500);
-      }
 
       const expireAtTs =
         activatedTs + Number(record.expire_days) * 86400000;
@@ -88,15 +78,12 @@ export default {
         issued_at: nowTs
       };
 
-      /* ===== SIGN ===== */
+      /* ===== SIGN DATA ===== */
 
       const raw =
-        `${payload.key}|${payload.hwid}|` +
-        `${payload.expire_at_ts}|${payload.issued_at}`;
+        `${payload.key}|${payload.hwid}|${payload.expire_at_ts}|${payload.issued_at}`;
 
-      const signature = await signHmac(raw, env.SECRET_KEY);
-
-      /* ===== RESPONSE ===== */
+      const signature = await signRSA(raw, env.PRIVATE_KEY);
 
       const response = {
         ...payload,
@@ -106,8 +93,6 @@ export default {
       return json(response);
 
     } catch (e) {
-
-      /* ===== GLOBAL ERROR ===== */
 
       return json({
         error: "worker_exception",
@@ -119,27 +104,51 @@ export default {
 };
 
 
-/* ===== HMAC SIGN ===== */
+/* ===== RSA SIGN ===== */
 
-async function signHmac(data, secret) {
+async function signRSA(data, privateKeyPem) {
 
   const enc = new TextEncoder();
 
   const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
+    "pkcs8",
+    pemToArrayBuffer(privateKeyPem),
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      hash: "SHA-256"
+    },
     false,
     ["sign"]
   );
 
   const sig = await crypto.subtle.sign(
-    "HMAC",
+    "RSASSA-PKCS1-v1_5",
     key,
     enc.encode(data)
   );
 
   return bufferToBase64(sig);
+}
+
+
+/* ===== PEM → ARRAYBUFFER ===== */
+
+function pemToArrayBuffer(pem) {
+
+  const b64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s/g, "");
+
+  const binary = atob(b64);
+
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes.buffer;
 }
 
 

@@ -87,7 +87,7 @@ export default {
       /* ===== SIGN DATA ===== */
 
       const raw =
-        `${payload.key}|${payload.hwid}|${payload.expire_at_ts}|${payload.issued_at}|${timestamp}`;
+        `${payload.key}|${payload.hwid}|${payload.expire_at_ts}|${payload.issued_at}|${payload.timestamp}`;
 
       const signature = await signRSA(raw, env.PRIVATE_KEY);
 

@@ -81,7 +81,8 @@ export default {
         key: key,
         hwid: finalHwid,
         expire_at_ts: expireAtTs,
-        issued_at: nowTs
+        issued_at: nowTs,
+        password: env.APP_PASS
       };
 
       /* ===== SIGN DATA ===== */
@@ -89,7 +90,7 @@ export default {
       /* ===== SIGN DATA ===== */
       
       const raw =
-      `${payload.key}|${payload.hwid}|${payload.expire_at_ts}|${payload.issued_at}|${timestamp}`;
+      `${payload.key}|${payload.hwid}|${payload.expire_at_ts}|${payload.issued_at}|${timestamp}|${payload.password}`;
       
       const signature = await signRSA(raw, env.PRIVATE_KEY);
       

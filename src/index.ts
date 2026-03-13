@@ -15,10 +15,16 @@ export default {
         return json({ error: "Invalid JSON body" }, 400);
       }
 
-      const { key, hwid } = body || {};
+      const { key, hwid, timestamp } = body || {};
 
-      if (!key || !hwid) {
-        return json({ error: "Missing key or hwid" }, 400);
+      if (!key || !hwid || !timestamp) {
+        return json({ error: "Missing key, hwid or timestamp" }, 400);
+      }
+
+      const now = Date.now();
+  
+      if (Math.abs(now - timestamp) > 60000) { // 5 phút
+        return json({ error: "Timestamp invalid" }, 403);
       }
 
       /* ===== DB CHECK ===== */
@@ -81,12 +87,13 @@ export default {
       /* ===== SIGN DATA ===== */
 
       const raw =
-        `${payload.key}|${payload.hwid}|${payload.expire_at_ts}|${payload.issued_at}`;
+        `${payload.key}|${payload.hwid}|${payload.expire_at_ts}|${payload.issued_at}|${timestamp}`;
 
       const signature = await signRSA(raw, env.PRIVATE_KEY);
 
       const response = {
         ...payload,
+        timestamp,
         signature
       };
 

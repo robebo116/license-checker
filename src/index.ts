@@ -1,6 +1,14 @@
 export default {
   async fetch(request, env) {
-
+    const url = new URL(request.url);
+    
+    // endpoint lấy thời gian server
+    if (url.pathname === "/time") {
+      return new Response(
+        JSON.stringify({ now: Date.now() }),
+        { headers: { "content-type": "application/json" } }
+      );
+    }
     try {
 
       if (request.method !== "POST") {
